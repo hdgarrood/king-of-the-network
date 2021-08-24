@@ -34,8 +34,8 @@ let gameScale: number = 1.0;
 
 // Rescale the canvas according to the viewport size, returning the new scale factor
 function rescaleCanvas() {
-  let viewportWidth = document.body.clientWidth;
-  let viewportHeight = document.body.clientHeight;
+  let viewportWidth = document.documentElement.clientWidth;
+  let viewportHeight = document.documentElement.clientHeight;
   let viewportAspectRatio = viewportWidth / viewportHeight;
   if (GAME_ASPECT_RATIO > viewportAspectRatio) {
     // Limited by width
