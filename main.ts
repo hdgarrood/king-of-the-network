@@ -5,6 +5,22 @@ const GAME_HEIGHT: number = 100;
 const GAME_ASPECT_RATIO = GAME_WIDTH / GAME_HEIGHT;
 const PLAYER_MAX_SPEED: number = 0.4; // maximum horizontal speed
 const PLAYER_ACCELERATION: number = 0.03; // horizontal acceleration
+const PLAYER_WIDTH: number = 5;
+const PLAYER_HEIGHT: number = 10;
+const DEBUG: boolean = true;
+
+type Rect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+// Rectangles that the player can collide with
+const walls: Rect[] = [
+  { x: 0, y: 90, width: GAME_WIDTH, height: 10 },
+  { x: 100, y: 0, width: 10, height: GAME_HEIGHT }
+]
 
 type Player = {
   direction: Direction;
@@ -29,13 +45,22 @@ type GameInput = {
   player2: PlayerInput;
 };
 
+function playerRect(player: Player): Rect {
+  return {
+    x: player.position.x,
+    y: player.position.y,
+    width: PLAYER_WIDTH,
+    height: PLAYER_HEIGHT
+  };
+}
+
 let canvas = document.getElementById('canvas') as HTMLCanvasElement;
 let gameScale: number = 1.0;
 
 // Rescale the canvas according to the viewport size, returning the new scale factor
 function rescaleCanvas() {
-  let viewportWidth = document.documentElement.clientWidth;
-  let viewportHeight = document.documentElement.clientHeight;
+  let viewportWidth = document.body.clientWidth;
+  let viewportHeight = document.body.clientHeight;
   let viewportAspectRatio = viewportWidth / viewportHeight;
   if (GAME_ASPECT_RATIO > viewportAspectRatio) {
     // Limited by width
@@ -55,6 +80,13 @@ rescaleCanvas();
 // Clamp a value into the range [-limit, limit] (assuming limit is positive)
 function absclamp(value: number, limit: number): number {
   return Math.min(Math.max(-limit, value), limit)
+}
+
+function doRectsIntersect(a: Rect, b: Rect): boolean {
+  return a.x < (b.x + b.width) &&
+    (a.x + a.width) > b.x &&
+    a.y < (b.y + b.height) &&
+    (a.y + a.height) > b.y;
 }
 
 function desiredDirection(leftKey: boolean, rightKey: boolean, currentDirection: Direction): Direction {
@@ -93,7 +125,22 @@ function handleHorizontalMovement(player: Player) {
   player.velocity.x = absclamp(desiredVelocity, PLAYER_MAX_SPEED);
 
   // Then update positions
-  player.position.x += player.velocity.x
+  let desiredPosition = playerRect(player);
+  desiredPosition.x = remainder(player.position.x + player.velocity.x, GAME_WIDTH);
+  walls.forEach((wall) => {
+    if (doRectsIntersect(wall, desiredPosition)) {
+      if (player.velocity.x > 0) {
+        desiredPosition.x = wall.x - desiredPosition.width;
+      } else {
+        desiredPosition.x = wall.x + wall.width;
+      }
+    }
+  });
+  player.position.x = desiredPosition.x;
+}
+
+function remainder(dividend: number, divisor: number): number {
+  return ((dividend % divisor) + divisor) % divisor;
 }
 
 function renderPlayer(ctx: CanvasRenderingContext2D, position: R2, fillStyle: string): void {
@@ -106,6 +153,12 @@ function render(state: GameState, ctx: CanvasRenderingContext2D): void {
   ctx.fillRect(0, 0, gameScale * GAME_WIDTH, gameScale * GAME_HEIGHT);
   renderPlayer(ctx, state.player1.position, 'red');
   renderPlayer(ctx, state.player2.position, 'blue');
+  if (DEBUG) {
+    walls.forEach((wall) => {
+      ctx.strokeStyle = 'white';
+      ctx.strokeRect(gameScale * wall.x, gameScale * wall.y, gameScale * wall.width, gameScale * wall.height);
+    })
+  }
 }
 
 type KeyboardState = {
