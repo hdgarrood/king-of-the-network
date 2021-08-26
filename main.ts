@@ -5,7 +5,9 @@ const GAME_HEIGHT: number = 100;
 const GAME_ASPECT_RATIO = GAME_WIDTH / GAME_HEIGHT;
 const PLAYER_MAX_SPEED: number = 0.4; // maximum horizontal speed
 const PLAYER_ACCELERATION: number = 0.03; // horizontal acceleration
-const PLAYER_JUMP_SPEED: number = 1.2;
+const PLAYER_JUMP_INITIAL_SPEED: number = 0.8;
+const PLAYER_JUMP_HOLD_ACCELERATION: number = 0.01;
+const PLAYER_JUMP_FRAMES: number = 25; // number of frames the player can hold the jump button for to jump higher
 const GRAVITY: number = 0.04;
 const PLAYER_WIDTH: number = 5;
 const PLAYER_HEIGHT: number = 10;
@@ -26,7 +28,7 @@ const walls: Rect[] = [
 
 type Player = {
   direction: Direction;
-  jumping: boolean;
+  jumpFrames: number;
   position: R2;
   velocity: R2;
 };
@@ -107,12 +109,10 @@ function desiredDirection(leftKey: boolean, rightKey: boolean, currentDirection:
 function handleEvents(state: GameState, input: GameInput): void {
   state.player1.direction = desiredDirection(keyboardState['a'], keyboardState['d'], state.player1.direction);
   handleHorizontalMovement(state.player1);
-  state.player1.jumping = keyboardState['w'];
-  handleVerticalMovement(state.player1);
+  handleVerticalMovement(state.player1, keyboardState['w']);
   state.player2.direction = desiredDirection(keyboardState['ArrowLeft'], keyboardState['ArrowRight'], state.player2.direction);
   handleHorizontalMovement(state.player2);
-  state.player2.jumping = keyboardState['ArrowUp'];
-  handleVerticalMovement(state.player2);
+  handleVerticalMovement(state.player2, keyboardState['ArrowUp']);
 }
 
 function handleHorizontalMovement(player: Player) {
@@ -157,10 +157,16 @@ function isStanding(player: Player) {
   return walls.some((w) => doRectsIntersect(w, prect));
 }
 
-function handleVerticalMovement(player: Player) {
-  if (player.jumping && isStanding(player)) {
-    player.velocity.y = -PLAYER_JUMP_SPEED;
+function handleVerticalMovement(player: Player, wishesToJump: boolean) {
+  if (wishesToJump && isStanding(player)) {
+    player.jumpFrames = PLAYER_JUMP_FRAMES;
+    player.velocity.y = -PLAYER_JUMP_INITIAL_SPEED;
+  } else if (wishesToJump && player.jumpFrames > 0) {
+    // while the player has jump frames and jump is held, they accelerate upwards
+    player.jumpFrames -= 1;
+    player.velocity.y -= PLAYER_JUMP_HOLD_ACCELERATION;
   } else {
+    player.jumpFrames = 0;
     player.velocity.y += GRAVITY;
   }
 
@@ -243,13 +249,13 @@ function startGame(): void {
       position: { x: 50, y: 80 },
       velocity: { x: 0, y: 0 },
       direction: null,
-      jumping: false
+      jumpFrames: 0
     },
     player2: {
       position: { x: 150, y: 80 },
       velocity: { x: 0, y: 0 },
       direction: null,
-      jumping: false
+      jumpFrames: 0
     }
   };
   let gameInput: GameInput = {
