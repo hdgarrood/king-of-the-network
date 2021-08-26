@@ -5,6 +5,8 @@ const GAME_HEIGHT: number = 100;
 const GAME_ASPECT_RATIO = GAME_WIDTH / GAME_HEIGHT;
 const PLAYER_MAX_SPEED: number = 0.4; // maximum horizontal speed
 const PLAYER_ACCELERATION: number = 0.03; // horizontal acceleration
+const PLAYER_JUMP_SPEED: number = 1.2;
+const GRAVITY: number = 0.04;
 const PLAYER_WIDTH: number = 5;
 const PLAYER_HEIGHT: number = 10;
 const DEBUG: boolean = true;
@@ -24,6 +26,7 @@ const walls: Rect[] = [
 
 type Player = {
   direction: Direction;
+  jumping: boolean;
   position: R2;
   velocity: R2;
 };
@@ -104,8 +107,12 @@ function desiredDirection(leftKey: boolean, rightKey: boolean, currentDirection:
 function handleEvents(state: GameState, input: GameInput): void {
   state.player1.direction = desiredDirection(keyboardState['a'], keyboardState['d'], state.player1.direction);
   handleHorizontalMovement(state.player1);
+  state.player1.jumping = keyboardState['w'];
+  handleVerticalMovement(state.player1);
   state.player2.direction = desiredDirection(keyboardState['ArrowLeft'], keyboardState['ArrowRight'], state.player2.direction);
   handleHorizontalMovement(state.player2);
+  state.player2.jumping = keyboardState['ArrowUp'];
+  handleVerticalMovement(state.player2);
 }
 
 function handleHorizontalMovement(player: Player) {
@@ -127,8 +134,10 @@ function handleHorizontalMovement(player: Player) {
   // Then update positions
   let desiredPosition = playerRect(player);
   desiredPosition.x = remainder(player.position.x + player.velocity.x, GAME_WIDTH);
+  let didCollide = false;
   walls.forEach((wall) => {
     if (doRectsIntersect(wall, desiredPosition)) {
+      didCollide = true;
       if (player.velocity.x > 0) {
         desiredPosition.x = wall.x - desiredPosition.width;
       } else {
@@ -136,7 +145,42 @@ function handleHorizontalMovement(player: Player) {
       }
     }
   });
+  if (didCollide) {
+    player.velocity.x = 0;
+  }
   player.position.x = desiredPosition.x;
+}
+
+function isStanding(player: Player) {
+  let prect = playerRect(player);
+  prect.y += 0.01;
+  return walls.some((w) => doRectsIntersect(w, prect));
+}
+
+function handleVerticalMovement(player: Player) {
+  if (player.jumping && isStanding(player)) {
+    player.velocity.y = -PLAYER_JUMP_SPEED;
+  } else {
+    player.velocity.y += GRAVITY;
+  }
+
+  let desiredPosition = playerRect(player);
+  desiredPosition.y = remainder(player.position.y + player.velocity.y, GAME_HEIGHT);
+  let didCollide = false;
+  walls.forEach((wall) => {
+    if (doRectsIntersect(wall, desiredPosition)) {
+      didCollide = true;
+      if (player.velocity.y > 0) {
+        desiredPosition.y = wall.y - desiredPosition.height;
+      } else {
+        desiredPosition.y = wall.y + wall.height;
+      }
+    }
+  });
+  if (didCollide) {
+    player.velocity.y = 0;
+  }
+  player.position.y = desiredPosition.y;
 }
 
 function remainder(dividend: number, divisor: number): number {
@@ -198,12 +242,14 @@ function startGame(): void {
     player1: {
       position: { x: 50, y: 80 },
       velocity: { x: 0, y: 0 },
-      direction: null
+      direction: null,
+      jumping: false
     },
     player2: {
       position: { x: 150, y: 80 },
       velocity: { x: 0, y: 0 },
-      direction: null
+      direction: null,
+      jumping: false
     }
   };
   let gameInput: GameInput = {
@@ -211,10 +257,14 @@ function startGame(): void {
     player2: { direction: null, jumping: false }
   }
   let ctx = canvas.getContext('2d') || (function () { throw new Error("Unable to get canvas context"); })();
+  let debugElement = document.getElementById('debug') || (function() { throw new Error("Unable to get debug element"); })();
   function gameLoop(_timestamp: number) {
     requestAnimationFrame(gameLoop);
     handleEvents(gameState, gameInput);
     render(gameState, ctx);
+    if (DEBUG) {
+      debugElement.innerText = JSON.stringify(gameState, null, 2);
+    }
   }
   requestAnimationFrame(gameLoop);
 }
